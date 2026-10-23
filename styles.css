@@ -52,6 +52,10 @@ html[data-lang="ru"] body [lang="en"], html[data-lang="en"] body [lang="ru"] { d
 .dl.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .dl.primary small { color: rgba(255,255,255,.8); }
 .dl.primary:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+.versions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 24px; }
+.versions .label { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; margin-right: 4px; }
+.ver { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 13px; padding: 5px 12px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--surface); color: var(--text); }
+.ver i { font-style: normal; font-size: 9px; color: var(--accent); }
 .links { display: flex; flex-wrap: wrap; gap: 8px; }
 .pill { font-size: 14px; padding: 7px 14px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface); transition: border-color .15s; }
 .pill i { font-style: normal; color: var(--muted); margin-right: 4px; }
@@ -78,6 +82,7 @@ html[data-lang="ru"] body [lang="en"], html[data-lang="en"] body [lang="ru"] { d
 .section-head { margin-bottom: 40px; }
 .section-head h2 { font-size: clamp(36px, 4.4vw, 56px); line-height: 1.02; letter-spacing: -.03em; font-weight: 800; margin-top: 12px; }
 .section-lead { color: var(--muted); font-size: 17px; margin-top: 14px; max-width: 640px; }
+.section-note { margin-top: 16px; padding-left: 14px; border-left: 2px solid var(--line-2); color: var(--dim); font-size: 14px; max-width: 780px; }
 .num { font-family: var(--mono); font-size: 12px; color: var(--dim); }
 .tag { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .1em; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 1px 5px; vertical-align: 3px; margin-left: 6px; }
 
