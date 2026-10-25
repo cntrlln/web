@@ -1,6 +1,6 @@
 // Gamepad Viewer: a 1:1 port of the in-game overlay of Controllin
-// (crates/client/src/module/gamepad_viewer/skins.rs): the classic panel, the v4pro (Flydigi
-// Vader 4 Pro) and DualShock 4 skins, drawn in the pixel space of the
+// (crates/client/src/module/gamepad_viewer/skins.rs): the classic panel, v4pro (Flydigi
+// Vader 4 Pro), DualShock 4, Tarantula 8K and Machenike F1 skins, drawn in the pixel space of the
 // reference photos. Reacts to a real gamepad (Gamepad API), otherwise plays a
 // demo loop.
 (() => {
@@ -429,6 +429,340 @@
     stick(146, 114, 19, pad.rx, pad.ry, b(BTN_RS));
   };
 
+  // ---- helpers of the tarantula / machenike skins (skins.rs)
+  // keeps the part of the polygon left of the line a -> b
+  const clipHalf = (pts, a, b) => {
+    const side = (p) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+    const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length], sp = side(p), sq = side(q);
+      if (sp >= 0) out.push(p);
+      if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+    }
+    return out;
+  };
+  const inside = (p, poly) => {
+    let c = false;
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < a[0] + (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1])) c = !c;
+    }
+    return c;
+  };
+  // D-pad button aimed at the centre: pointed inner end, rounded outer end
+  const petal = (cx, cy, ux, uy, tip, shoulder, end, half, r) => {
+    const uv = [[tip, 0], [shoulder, half]];
+    for (const [cv, a0] of [[half - r, 0], [-(half - r), 90]]) {
+      for (let i = 0; i <= 4; i++) {
+        const a = (a0 + i * 22.5) * Math.PI / 180;
+        uv.push([end - r + r * Math.sin(a), cv + r * Math.cos(a)]);
+      }
+    }
+    uv.push([shoulder, -half]);
+    const px = -uy, py = ux;
+    return uv.map((p) => [cx + ux * p[0] + px * p[1], cy + uy * p[0] + py * p[1]]);
+  };
+  // short radial lines (knurling, ribs); skew turns the outer end
+  const ticks = (x, y, r0, r1, n, c, w, skew) => {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI * 2 * i / n;
+      ctx.moveTo(x + r0 * Math.cos(a), y + r0 * Math.sin(a));
+      ctx.lineTo(x + r1 * Math.cos(a + skew), y + r1 * Math.sin(a + skew));
+    }
+    stroke(c, w);
+  };
+  const mirrorRev = (pts, cx) => pts.slice().reverse().map((p) => [2 * cx - p[0], p[1]]);
+  const line = (pts, c, w) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.lineJoin = 'round';
+    stroke(c, w);
+  };
+  // circular arc, degrees (0 = right, 90 = down)
+  const arc = (x, y, r, a0, a1, c, w) => {
+    ctx.beginPath(); ctx.arc(x, y, r, a0 * Math.PI / 180, a1 * Math.PI / 180);
+    ctx.lineCap = 'round'; stroke(c, w); ctx.lineCap = 'butt';
+  };
+  // parallel lines along dir, step apart, clipped to the outline
+  const hatch = (pts, step, dir, c, w) => {
+    ctx.save(); path(pts); ctx.clip();
+    const l = Math.max(Math.hypot(dir[0], dir[1]), 1e-3), dx = dir[0] / l, dy = dir[1] / l, nx = -dy, ny = dx;
+    const pr = pts.map((p) => p[0] * nx + p[1] * ny);
+    const along = pts.map((p) => p[0] * dx + p[1] * dy);
+    const lo = Math.min(...pr), hi = Math.max(...pr), a0 = Math.min(...along) - 2, a1 = Math.max(...along) + 2;
+    ctx.beginPath();
+    for (let o = lo + step / 2; o < hi; o += step) {
+      ctx.moveTo(nx * o + dx * a0, ny * o + dy * a0);
+      ctx.lineTo(nx * o + dx * a1, ny * o + dy * a1);
+    }
+    stroke(c, w);
+    ctx.restore();
+  };
+
+  // ---- tarantula 8k (GameSir Tarantula 8K)
+  const T = {
+    body: rgb(0xf0581e), plate: rgb(0x1e1e21), triggers: rgb(0x1a1a1d), bumpers: rgb(0x1d1d20),
+    sticks: rgb(0x1c1c1f), dpad: rgb(0x3b3b3e), buttons: rgb(0x111113), letters: rgb(0xf4f4f4),
+    small: rgb(0xf2642a), leds: rgb(0xffb21e), pressed: rgb(0xfff3e6),
+  };
+  const T8K_BOUNDS = [136, 328, 776, 534];
+  const T8K_CX = 524;
+  const T8K_BODY = [[391,367],[362,368],[358,362],[349,360],[305,364],[270,373],[241,390],[227,403],[225,410],[209,429],[202,446],[176,535],[158,616],[146,688],[142,737],[144,782],[152,814],[166,838],[187,853],[218,858],[248,851],[274,830],[292,805],[313,759],[318,737],[323,731],[333,700],[346,680],[366,669],[415,662],[633,662],[682,669],[702,680],[715,700],[725,731],[730,737],[735,759],[756,805],[774,830],[800,851],[830,858],[861,853],[882,838],[896,814],[904,782],[906,737],[902,688],[890,616],[872,535],[846,446],[839,429],[823,410],[821,403],[807,390],[778,373],[743,364],[699,360],[690,362],[686,368],[657,367]];
+  const T8K_LT = rounded([[240,394],[250,368],[274,349],[310,337],[348,333],[364,338],[367,372]], [0, 8, 10, 10, 8, 5, 0]);
+  const T8K_RT = mirrored(T8K_LT, T8K_CX);
+  const T8K_LB = [[226,405],[241,389],[270,372],[305,363],[349,359],[358,362],[364,373],[354,375],[318,376],[284,383],[256,395],[235,410]];
+  const T8K_RB = mirrored(T8K_LB, T8K_CX);
+  const T8K_PLATE = rounded([[390,366],[658,366],[650,380],[612,418],[590,430],[560,434],[488,434],[458,430],[436,418],[398,380]], [2, 2, 4, 8, 8, 6, 6, 8, 8, 4]);
+  const T8K_PANEL_HALF = [[390,378],[330,380],[285,388],[250,402],[228,420],[214,448],[212,478],[222,503],[248,525],[300,560],[350,594],[385,613],[430,622]];
+  const T8K_PANEL = (() => { const v = T8K_PANEL_HALF.concat(mirrorRev(T8K_PANEL_HALF, T8K_CX)); return rounded(v, v.map(() => 10)); })();
+
+  const t8kDpad = (pad, bodyC, acc) => {
+    const H = 20.5, L = 59, R_OUT = 6, R_IN = 2, cx = 296, cy = 469;
+    const dp = T.dpad;
+    const b = (bit) => (pad.buttons & bit) !== 0;
+    disc(cx, cy, 66, darker(bodyC, 0.05));
+    ring(cx, cy, 66, darker(bodyC, 0.28), 1.2);
+    arc(cx, cy, 63.5, 200, 340, withAlpha(darker(bodyC, 0.3), 90), 3);
+    let tx = 0, ty = 0;
+    for (const [bit, ux, uy] of DIRS) if (b(bit)) { tx += ux * 1.5; ty += uy * 1.5; }
+    const x = cx + tx, y = cy + ty;
+    shape(crossOutline(cx + 0.5, cy + 4.5, H, L, R_OUT, R_IN), blackA(90));
+    shape(crossOutline(x + 0.5, y + 4, H, L, R_OUT, R_IN), darker(dp, 0.62));
+    const cross = crossOutline(x, y, H, L, R_OUT, R_IN);
+    fill(cross, lighter(dp, 0.06), darker(dp, 0.1), y - L, y + L);
+    for (const [bit, ux, uy] of DIRS) {
+      if (b(bit)) fill(crossArm(x, y, H, L, ux, uy, R_OUT), lighter(acc, 0.1), acc, y - L, y + L);
+    }
+    edgeLine(cross, darker(dp, 0.45), 1.3);
+    const c = [[x - H, y - H], [x + H, y - H], [x + H, y + H], [x - H, y + H]];
+    const shades = [darker(dp, 0.04), lighter(dp, 0.02), lighter(dp, 0.1), lighter(dp, 0.02)];
+    for (let i = 0; i < 4; i++) tri([c[i], c[(i + 1) % 4], [x, y]], shades[i]);
+    for (const [ax, ay, light, w] of [[-1, -1, 0.1, 2], [1, -1, 0.1, 2], [1, 1, 0.22, 3.2], [-1, 1, 0.22, 3.2]]) {
+      seg(x + ax * (H - 1), y + ay * (H - 1), x, y, lighter(dp, light), w);
+    }
+    const mark = (bit) => (b(bit) ? darker(acc, 0.45) : lighter(dp, 0.22));
+    disc(x - 46, y, 2.2, mark(DPAD_LEFT));
+    disc(x + 46, y, 2.2, mark(DPAD_RIGHT));
+    disc(x, y - 46, 2.2, mark(DPAD_UP));
+    tri([[x, y + 48], [x - 4, y + 43], [x + 4, y + 43]], mark(DPAD_DOWN));
+  };
+
+  const tarantula = (pad) => {
+    const acc = T.pressed, onAcc = on(acc);
+    const b = (bit) => (pad.buttons & bit) !== 0;
+    const trig = T.triggers;
+    for (const [o, v, l, x] of [[T8K_LT, pad.lt, 'LT', 318], [T8K_RT, pad.rt, 'RT', 730]]) {
+      shape(o, trig);
+      const t = v / 255;
+      rising(o, t, acc);
+      hatch(o, 6, [1, -1], t < 0.5 ? withAlpha(lighter(trig, 0.1), 110) : withAlpha(darker(acc, 0.2), 90), 1.2);
+      edgeLine(o, edge(trig), 1.2);
+      label(x, 353, l, 16, t > 0.5 ? onAcc : lighter(trig, 0.4));
+    }
+    const bodyC = T.body;
+    fill(T8K_BODY, lighter(bodyC, 0.04), darker(bodyC, 0.25), 360, 860);
+    edgeLine(T8K_BODY, darker(bodyC, 0.3), 1.5);
+    fill(T8K_PANEL, lighter(bodyC, 0.07), darker(bodyC, 0.04), 378, 624);
+    edgeLine(T8K_PANEL, darker(bodyC, 0.22), 1.2);
+    line(T8K_PANEL.filter((p) => p[1] > 500), withAlpha(lighter(bodyC, 0.3), 120), 1);
+    for (const [o, pressed] of [[T8K_LB, b(BTN_LB)], [T8K_RB, b(BTN_RB)]]) {
+      shape(o, pressed ? acc : T.bumpers);
+      edgeLine(o, edge(T.bumpers), 1);
+    }
+    const plateC = T.plate;
+    fill(T8K_PLATE, lighter(plateC, 0.1), darker(plateC, 0.1), 366, 434);
+    edgeLine(T8K_PLATE, edge(plateC), 1.2);
+    const glow = withAlpha(rgb(0x8a5cff), 150);
+    line([[440, 420], [458, 431], [488, 435]], glow, 1.6);
+    line([[608, 420], [590, 431], [560, 435]], glow, 1.6);
+    const groove = darker(bodyC, 0.3);
+    for (let k = 0; k < 3; k++) {
+      const o = k * 5;
+      seg(226 + o * 0.6, 544 + o, 268 + o * 0.6, 571 + o, groove, 1.2);
+      seg(282 + o * 0.6, 581 + o, 318 + o * 0.6, 604 + o, groove, 1.2);
+    }
+    const small = T.small;
+    for (const [x1, y1, x2, y2] of [[366, 398, 398, 414], [413, 432, 445, 446]]) {
+      for (const [a, c] of [[x1, x2], [2 * T8K_CX - x1, 2 * T8K_CX - x2]]) {
+        seg(a, y1 + 1.5, c, y2 + 1.5, darker(small, 0.35), 18);
+        seg(a, y1, c, y2, small, 16);
+        seg(a - 2, y1 - 3, c - 2, y2 - 3, withAlpha(lighter(small, 0.35), 120), 3);
+      }
+    }
+    for (const [x, bit] of [[485, BTN_BACK], [T8K_CX, 0], [564, BTN_START]]) {
+      disc(x, 461.5, 12, darker(small, 0.35));
+      disc(x, 460, 11, bit && b(bit) ? acc : small);
+      arc(x, 460, 8, 200, 290, withAlpha(lighter(small, 0.4), 150), 2);
+    }
+    const lit = b(BTN_BACK) || b(BTN_START);
+    for (const [x, w] of [[466, 14], [506, 9], [T8K_CX, 9], [542, 9], [582, 14]]) {
+      rr(x - w / 2, 493, w, 5, 2.5, lit ? lighter(T.leds, 0.4) : T.leds);
+    }
+    t8kDpad(pad, bodyC, acc);
+    for (const [bit, l, x, y] of [[BTN_Y, 'Y', 752, 421], [BTN_X, 'X', 705, 467], [BTN_B, 'B', 799, 467], [BTN_A, 'A', 752, 513]]) {
+      const pressed = b(bit);
+      disc(x, y, 27.5, darker(bodyC, 0.12));
+      ring(x, y, 27.5, darker(bodyC, 0.3), 1);
+      disc(x, y + 2, 23.5, rgb(0x000000));
+      disc(x, y, 23.5, pressed ? acc : T.buttons);
+      if (!pressed) {
+        arc(x, y, 18, 200, 290, whiteA(110), 3);
+        arc(x, y, 21, 30, 150, whiteA(35), 2);
+      }
+      label(x, y + 1, l, 26, pressed ? onAcc : T.letters);
+    }
+    const logo = rgb(0xe8e8ec);
+    disc(T8K_CX, 546, 27, darker(bodyC, 0.12));
+    disc(T8K_CX, 545, 25, logo);
+    ring(T8K_CX, 545, 25, rgb(0x9a9aa0), 1.2);
+    disc(T8K_CX, 545, 18.5, rgb(0x18181a));
+    arc(T8K_CX, 545, 11, 150, 390, logo, 3.5);
+    const st = T.sticks;
+    const stick = (cx, cy, x, y, click) => {
+      ring(cx, cy, 63, darker(bodyC, 0.2), 1);
+      disc(cx, cy, 58, darker(bodyC, 0.14));
+      ring(cx, cy, 58, darker(bodyC, 0.3), 1.2);
+      const [dx, dy, active] = cap(cx, cy, 11, x, y);
+      disc(dx + 1, dy + 3, 47, blackA(150));
+      disc(dx, dy, 47, darker(st, 0.25));
+      ticks(dx, dy, 41, 46.5, 44, lighter(st, 0.12), 1.2, 0);
+      if (active) ring(dx, dy, 47, acc, 3);
+      disc(dx, dy, 38, click ? acc : st);
+      ring(dx, dy, 38, darker(st, 0.4), 1.5);
+      arc(dx, dy, 33, 200, 300, whiteA(40), 3);
+    };
+    stick(407, 556, pad.lx, pad.ly, b(BTN_LS));
+    stick(641, 556, pad.rx, pad.ry, b(BTN_RS));
+  };
+
+  // ---- machenike f1 (Machenike F1)
+  const M = {
+    body: rgb(0xf2f2f4), grips: rgb(0xe6e8ec), plate: rgb(0xa9abb0), triggers: rgb(0xd6d7da),
+    bumpers: rgb(0xc9cbcf), sticks: rgb(0xdcdde0), ring: rgb(0x9a9ca1), dpad: rgb(0xd4d5d8),
+    buttons: rgb(0xd2d3d7), letters: rgb(0xfbfbfd), pressed: rgb(0x2f80ff),
+  };
+  const F1_BOUNDS = [283, 40, 697, 517];
+  const F1_CX = 631.5;
+  const F1_BODY = [[495,76],[482,69],[428,72],[402,79],[384,93],[368,114],[352,136],[342,153],[332,188],[310,255],[291,366],[291,459],[303,509],[315,529],[339,548],[357,553],[368,552],[387,542],[417,505],[436,473],[450,440],[469,418],[486,411],[506,408],[757,408],[777,411],[794,418],[813,440],[827,473],[846,505],[876,542],[895,552],[906,553],[924,548],[948,529],[960,509],[972,459],[972,366],[953,255],[931,188],[921,153],[911,136],[895,114],[879,93],[861,79],[835,72],[781,69],[768,76]];
+  const F1_LT = rounded([[384,104],[392,70],[410,52],[440,44],[476,44],[494,52],[498,100]], [0, 10, 12, 10, 8, 5, 0]);
+  const F1_RT = mirrored(F1_LT, F1_CX);
+  // LB band; the first F1_LB_OUTER points are its outer (top) edge
+  const F1_LB = [[350,140],[366,116],[383,95],[401,80],[428,72],[482,69],[497,77],[497,90],[460,87],[424,92],[400,103],[381,120],[366,142]];
+  const F1_RB = mirrored(F1_LB, F1_CX);
+  const F1_LB_OUTER = 7;
+  const F1_PLATE = rounded([[490,84],[773,84],[773,140],[712,199],[551,199],[490,140]], [4, 4, 10, 8, 8, 10]);
+  const F1_LOGO = rounded([[603.5,126],[631.5,116],[659.5,126],[650.5,148],[631.5,162],[612.5,148]], [5, 5, 5, 5, 5, 5]);
+  const F1_GRIP_EDGE = [[296,322],[330,335],[370,355],[410,385],[440,415],[452,440],[456,470]];
+  const F1_GRIP_L = (() => {
+    let g = F1_BODY;
+    for (let i = 0; i + 1 < F1_GRIP_EDGE.length; i++) g = clipHalf(g, F1_GRIP_EDGE[i], F1_GRIP_EDGE[i + 1]);
+    return clipHalf(g, [F1_CX, 0], [F1_CX, 1000]);
+  })();
+  const F1_GRIP_R = mirrored(F1_GRIP_L, F1_CX);
+  // speckles of the grip texture: the same pseudo-random points as the client
+  const F1_GRIP_DOTS = (() => {
+    let seed = 12345;
+    const next = () => { seed = ((Math.imul(seed, 1103515245) + 12345) >>> 0) & 0x7fffffff; return seed; };
+    const v = [];
+    for (let i = 0; i < 160; i++) {
+      const x = 290 + (next() % 170), y = 318 + (next() % 236);
+      if (inside([x, y], F1_GRIP_L)) v.push([x, y]);
+    }
+    return v;
+  })();
+
+  const machenike = (pad) => {
+    const acc = M.pressed, onAcc = on(acc);
+    const b = (bit) => (pad.buttons & bit) !== 0;
+    const trig = M.triggers;
+    for (const [o, v, l, x] of [[F1_LT, pad.lt, 'LT', 444], [F1_RT, pad.rt, 'RT', 819]]) {
+      shape(o, trig);
+      const t = v / 255;
+      rising(o, t, acc);
+      const dot = withAlpha(t < 0.5 ? darker(trig, 0.2) : lighter(acc, 0.35), 220);
+      [[50, 2.2], [56, 1.6]].forEach(([yy, r], row) => {
+        const shift = row === 1 ? 4.5 : 0;
+        for (let i = 0; i < 6; i++) disc(x - 22.5 + i * 9 + shift, yy, r, dot);
+      });
+      edgeLine(o, darker(trig, 0.22), 1.2);
+      label(x, 66, l, 15, t > 0.5 ? onAcc : darker(trig, 0.45));
+    }
+    const bodyC = M.body;
+    fill(F1_BODY, bodyC, darker(bodyC, 0.08), 70, 553);
+    edgeLine(F1_BODY, darker(bodyC, 0.25), 1.5);
+    const grips = M.grips, speck = withAlpha(darker(grips, 0.12), 160);
+    for (const [o, left] of [[F1_GRIP_L, true], [F1_GRIP_R, false]]) {
+      fill(o, lighter(grips, 0.2), darker(grips, 0.04), 320, 553);
+      for (const p of F1_GRIP_DOTS) disc(left ? p[0] : 2 * F1_CX - p[0], p[1], 1.3, speck);
+    }
+    const seam = darker(grips, 0.14), gripEdge = F1_GRIP_EDGE.slice(0, -1);
+    line(gripEdge, seam, 1.2);
+    line(mirrored(gripEdge, F1_CX), seam, 1.2);
+    const bump = M.bumpers;
+    for (const [o, pressed] of [[F1_LB, b(BTN_LB)], [F1_RB, b(BTN_RB)]]) {
+      const [top, bot] = pressed ? [lighter(acc, 0.1), acc] : [lighter(bump, 0.12), darker(bump, 0.08)];
+      fill(o, top, bot, 69, 142);
+      line(o.slice(0, F1_LB_OUTER), darker(bump, 0.45), 3);
+    }
+    const plateC = M.plate;
+    fill(F1_PLATE, lighter(plateC, 0.3), darker(plateC, 0.06), 84, 199);
+    edgeLine(F1_PLATE, darker(plateC, 0.35), 1.2);
+    rr(490, 84, 283, 12, 3, darker(plateC, 0.4));
+    line([[492, 142], [553, 197], [710, 197], [771, 142]], withAlpha(lighter(plateC, 0.6), 150), 1);
+    for (const x of [504, 736]) {
+      rr(x, 101, 23, 44, 8, darker(plateC, 0.2));
+      rr(x, 100, 23, 42, 8, lighter(plateC, 0.45));
+    }
+    shape(F1_LOGO, darker(plateC, 0.4));
+    edgeLine(F1_LOGO, lighter(plateC, 0.5), 1.5);
+    line([[617, 147], [621, 132], [F1_CX, 143], [642, 132], [646, 147]], lighter(plateC, 0.6), 3);
+    const key = M.buttons;
+    for (const [x, bit] of [[563.5, BTN_BACK], [699.5, BTN_START]]) {
+      disc(x, 178, 17, darker(plateC, 0.3));
+      disc(x, 179.5, 14, darker(key, 0.25));
+      disc(x, 178, 14, b(bit) ? acc : lighter(key, 0.25));
+    }
+    const cx = 416, cy = 188, dp = M.dpad;
+    for (const [bit, ux, uy] of DIRS) {
+      const pts = petal(cx, cy, ux, uy, 10, 25, 58, 20, 8);
+      shape(pts.map((p) => [p[0] + 0.5, p[1] + 3.5]), darker(dp, 0.3));
+      const [top, bot] = b(bit) ? [lighter(acc, 0.15), acc] : [lighter(dp, 0.3), darker(dp, 0.04)];
+      fill(pts, top, bot, cy - 58, cy + 58);
+      edgeLine(pts, darker(dp, 0.12), 1);
+    }
+    for (const [bit, l, x, y] of [[BTN_Y, 'Y', 851, 155], [BTN_X, 'X', 804, 203], [BTN_B, 'B', 898, 203], [BTN_A, 'A', 851, 251]]) {
+      const pressed = b(bit);
+      disc(x, y + 3.5, 24, darker(key, 0.3));
+      disc(x, y, 24, pressed ? acc : key);
+      ring(x, y, 24, darker(key, 0.1), 1);
+      if (!pressed) arc(x, y, 19, 200, 290, whiteA(120), 3);
+      label(x + 0.8, y + 1.8, l, 24, pressed ? darker(acc, 0.3) : darker(key, 0.22));
+      label(x, y + 1, l, 24, pressed ? onAcc : M.letters);
+    }
+    const st = M.sticks, ringC = M.ring, knurl = withAlpha(lighter(ringC, 0.55), 200);
+    const stick = (cx, cy, x, y, click) => {
+      disc(cx, cy + 2, 68, darker(bodyC, 0.12));
+      disc(cx, cy, 67, lighter(bodyC, 0.6));
+      disc(cx, cy, 60, ringC);
+      ticks(cx, cy, 47, 60, 60, knurl, 1, 0.2);
+      ticks(cx, cy, 47, 60, 60, knurl, 1, -0.2);
+      ring(cx, cy, 60, darker(ringC, 0.3), 1.5);
+      ring(cx, cy, 47, darker(ringC, 0.3), 1.5);
+      const [dx, dy, active] = cap(cx, cy, 11, x, y);
+      if (active) ring(cx, cy, 64, acc, 3);
+      disc(dx + 1, dy + 4, 41, blackA(60));
+      disc(dx, dy, 41, click ? acc : st);
+      ticks(dx, dy, 33, 40.5, 40, darker(st, 0.1), 1.2, 0);
+      ring(dx, dy, 41, darker(st, 0.18), 1.2);
+      disc(dx, dy, 31, click ? lighter(acc, 0.1) : lighter(st, 0.12));
+      arc(dx, dy, 25, 200, 300, whiteA(150), 3);
+    };
+    stick(515, 294, pad.lx, pad.ly, b(BTN_LS));
+    stick(748, 294, pad.rx, pad.ry, b(BTN_RS));
+  };
+
   // ---- input: a real gamepad (standard mapping) or the demo loop
   const STD = [BTN_A, BTN_B, BTN_X, BTN_Y, BTN_LB, BTN_RB, 0, 0, BTN_BACK, BTN_START, BTN_LS, BTN_RS, DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT];
   const axis = (v) => Math.round(Math.max(-1, Math.min(1, v || 0)) * 32767);
@@ -463,10 +797,17 @@
   };
 
   // ---- skins + loop
+  const SKINS = {
+    classic: [classic, CL_BOUNDS],
+    v4pro: [vader, VADER_BOUNDS],
+    ds4: [ds4, DS4_BOUNDS],
+    t8k: [tarantula, T8K_BOUNDS],
+    f1: [machenike, F1_BOUNDS],
+  };
   let skin = 'v4pro';
   try { skin = localStorage.getItem('controllin.skin') || skin; } catch (e) { /* private mode */ }
   const setSkin = (s) => {
-    skin = s === 'ds4' || s === 'classic' ? s : 'v4pro';
+    skin = SKINS[s] ? s : 'v4pro';
     chips.forEach((c) => { const a = c.dataset.skin === skin; c.classList.toggle('active', a); c.setAttribute('aria-pressed', String(a)); });
     try { localStorage.setItem('controllin.skin', skin); } catch (e) { /* ignore */ }
   };
@@ -481,12 +822,12 @@
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const [bx, by, bw, bh] = skin === 'ds4' ? DS4_BOUNDS : skin === 'classic' ? CL_BOUNDS : VADER_BOUNDS;
+    const [paint, [bx, by, bw, bh]] = SKINS[skin];
     const margin = 0.06;
     S = Math.min(w * (1 - 2 * margin) / bw, h * (1 - 2 * margin) / bh);
     const ox = (w - bw * S) / 2 - bx * S, oy = (h - bh * S) / 2 - by * S;
     ctx.setTransform(dpr * S, 0, 0, dpr * S, dpr * ox, dpr * oy);
-    if (skin === 'ds4') ds4(pad); else if (skin === 'classic') classic(pad); else vader(pad);
+    paint(pad);
   };
 
   let visible = true, start = performance.now();
