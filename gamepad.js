@@ -1,5 +1,5 @@
 // Gamepad Viewer: a 1:1 port of the in-game overlay of Controllin
-// (crates/client/src/module/gamepad_viewer/skins.rs): the v4pro (Flydigi
+// (crates/client/src/module/gamepad_viewer/skins.rs): the classic panel, the v4pro (Flydigi
 // Vader 4 Pro) and DualShock 4 skins, drawn in the pixel space of the
 // reference photos. Reacts to a real gamepad (Gamepad API), otherwise plays a
 // demo loop.
@@ -364,6 +364,71 @@
     stick(603, 427, pad.rx, pad.ry, b(BTN_RS));
   };
 
+  // ---- classic: the original panel (gamepad_viewer.rs Pen::panel), 232 x 142 points
+  const C = { panel: rgb(0x000000), buttons: rgb(0xffffff), pressed: rgb(0xe82e42) };
+  const CL_BOUNDS = [0, 0, 232, 142];
+  const CL_BORDER = [165, 40, 57, 90], CL_DIM = [176, 152, 157, 255], CL_FAINT = [132, 110, 115, 255];
+  const classic = (pad) => {
+    const b = (bit) => (pad.buttons & bit) !== 0;
+    const W = 232, H = 142;
+    const idleFill = withAlpha(C.buttons, 22), idleLine = withAlpha(C.buttons, 46);
+    const fg = (on_) => (on_ ? on(C.pressed) : CL_DIM);
+    rr(0, 0, W, H, 16, withAlpha(C.panel, 130));
+    rrLine(0.6, 0.6, W - 1.2, H - 1.2, 16, CL_BORDER, 1.2);
+    const pill = (x, y, w, h, t, pressed) => {
+      if (pressed) rr(x, y, w, h, h / 2, C.pressed);
+      else { rr(x, y, w, h, h / 2, idleFill); rrLine(x + 0.6, y + 0.6, w - 1.2, h - 1.2, h / 2, idleLine, 1.2); }
+      if (t) label(x + w / 2, y + h / 2, t, 10, fg(pressed));
+    };
+    const trigger = (x, y, w, h, t, value, fromRight) => {
+      rr(x, y, w, h, h / 2, idleFill);
+      rrLine(x + 0.6, y + 0.6, w - 1.2, h - 1.2, h / 2, idleLine, 1.2);
+      const v = value / 255;
+      if (v > 0.02) {
+        const fw = Math.max(w * v, h);
+        rr(fromRight ? x + w - fw : x, y, fw, h, h / 2, withAlpha(C.pressed, Math.round(90 + 165 * v)));
+      }
+      label(x + w / 2, y + h / 2, t, 10, fg(v > 0.5));
+    };
+    const round = (cx, cy, r, t, pressed) => {
+      if (pressed) disc(cx, cy, r, C.pressed);
+      else { disc(cx, cy, r, idleFill); ring(cx, cy, r, idleLine, 1.2); }
+      label(cx, cy, t, 10, fg(pressed));
+    };
+    const dpad = (cx, cy) => {
+      const SZ = 11, STEP = 12;
+      const cell = (dx, dy, bit) => rr(cx + dx - SZ / 2, cy + dy - SZ / 2, SZ, SZ, 3, bit && b(bit) ? C.pressed : idleFill);
+      cell(0, -STEP, DPAD_UP); cell(0, STEP, DPAD_DOWN); cell(-STEP, 0, DPAD_LEFT); cell(STEP, 0, DPAD_RIGHT); cell(0, 0, 0);
+    };
+    const stick = (cx, cy, r, x, y, click) => {
+      disc(cx, cy, r, click ? withAlpha(C.pressed, 90) : whiteA(14));
+      ring(cx, cy, r, idleLine, 1.2);
+      let vx = x / 32767, vy = -y / 32767;
+      const len = Math.hypot(vx, vy);
+      if (len > 1) { vx /= len; vy /= len; }
+      const active = len > STICK_ACTIVE, dotR = 6, reach = r - dotR - 1;
+      const dx = cx + vx * reach, dy = cy + vy * reach;
+      const hi = lighter(C.pressed, 0.3);
+      if (active) seg(cx, cy, dx, dy, withAlpha(hi, 150), 1.2);
+      disc(dx, dy, dotR, active || click ? hi : whiteA(190));
+    };
+
+    trigger(18, 10, 50, 14, 'LT', pad.lt, false);
+    pill(18, 28, 50, 14, 'LB', b(BTN_LB));
+    trigger(W - 68, 10, 50, 14, 'RT', pad.rt, true);
+    pill(W - 68, 28, 50, 14, 'RB', b(BTN_RB));
+    stick(50, 78, 19, pad.lx, pad.ly, b(BTN_LS));
+    pill(W / 2 - 23, 72, 18, 11, '', b(BTN_BACK));
+    pill(W / 2 + 5, 72, 18, 11, '', b(BTN_START));
+    const fx = 182, fy = 76;
+    round(fx, fy - 16, 7.5, 'Y', b(BTN_Y));
+    round(fx - 16, fy, 7.5, 'X', b(BTN_X));
+    round(fx + 16, fy, 7.5, 'B', b(BTN_B));
+    round(fx, fy + 16, 7.5, 'A', b(BTN_A));
+    dpad(88, 114);
+    stick(146, 114, 19, pad.rx, pad.ry, b(BTN_RS));
+  };
+
   // ---- input: a real gamepad (standard mapping) or the demo loop
   const STD = [BTN_A, BTN_B, BTN_X, BTN_Y, BTN_LB, BTN_RB, 0, 0, BTN_BACK, BTN_START, BTN_LS, BTN_RS, DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT];
   const axis = (v) => Math.round(Math.max(-1, Math.min(1, v || 0)) * 32767);
@@ -401,7 +466,7 @@
   let skin = 'v4pro';
   try { skin = localStorage.getItem('controllin.skin') || skin; } catch (e) { /* private mode */ }
   const setSkin = (s) => {
-    skin = s === 'ds4' ? 'ds4' : 'v4pro';
+    skin = s === 'ds4' || s === 'classic' ? s : 'v4pro';
     chips.forEach((c) => { const a = c.dataset.skin === skin; c.classList.toggle('active', a); c.setAttribute('aria-pressed', String(a)); });
     try { localStorage.setItem('controllin.skin', skin); } catch (e) { /* ignore */ }
   };
@@ -416,12 +481,12 @@
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const [bx, by, bw, bh] = skin === 'ds4' ? DS4_BOUNDS : VADER_BOUNDS;
+    const [bx, by, bw, bh] = skin === 'ds4' ? DS4_BOUNDS : skin === 'classic' ? CL_BOUNDS : VADER_BOUNDS;
     const margin = 0.06;
     S = Math.min(w * (1 - 2 * margin) / bw, h * (1 - 2 * margin) / bh);
     const ox = (w - bw * S) / 2 - bx * S, oy = (h - bh * S) / 2 - by * S;
     ctx.setTransform(dpr * S, 0, 0, dpr * S, dpr * ox, dpr * oy);
-    if (skin === 'ds4') ds4(pad); else vader(pad);
+    if (skin === 'ds4') ds4(pad); else if (skin === 'classic') classic(pad); else vader(pad);
   };
 
   let visible = true, start = performance.now();
